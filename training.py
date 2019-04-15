@@ -185,8 +185,8 @@ def training_procedure(FLAGS):
               fake_loss_1 = adversarial_loss(discriminator(Variable(reconstructed_X_1)), fake)
               fake_loss_2 = adversarial_loss(discriminator(Variable(reconstructed_X_2)), fake)
 
-              discriminator_loss = (real_loss_1 + real_loss_2 + fake_loss_1 + fake_loss_2) / 4.0
-              discriminator_loss.backward()
+              discriminator_f_loss = (real_loss_1 + real_loss_2 + fake_loss_1 + fake_loss_2) / 4.0
+              discriminator_f_loss.backward()
 
               discriminator_optimizer.step()
 
@@ -228,8 +228,8 @@ def training_procedure(FLAGS):
               fake_loss_1 = adversarial_loss(discriminator(Variable(reconstructed_X_1)), fake)
               fake_loss_2 = adversarial_loss(discriminator(Variable(reconstructed_X_2)), fake)
 
-              discriminator_loss = (real_loss_1 + real_loss_2 + fake_loss_1 + fake_loss_2) / 4.0
-              discriminator_loss.backward()
+              discriminator_r_loss = (real_loss_1 + real_loss_2 + fake_loss_1 + fake_loss_2) / 4.0
+              discriminator_r_loss.backward()
 
               discriminator_optimizer.step()
 
@@ -242,6 +242,8 @@ def training_procedure(FLAGS):
                 print('Reconstruction loss: ' + str(reconstruction_error.data.storage().tolist()[0]))
                 print('KL-Divergence loss: ' + str(kl_divergence_error.data.storage().tolist()[0]))
                 print('Reverse cycle loss: ' + str(reverse_cycle_loss.data.storage().tolist()[0]))
+                print('Discriminator F loss: ' + str(discriminator_f_loss.data.storage().tolist()[0]))
+                print('Discriminator R loss: ' + str(discriminator_r_loss.data.storage().tolist()[0]))
 
             # write to log
             with open(FLAGS.log_file, 'a') as log:
@@ -250,7 +252,9 @@ def training_procedure(FLAGS):
                     iteration,
                     reconstruction_error.data.storage().tolist()[0],
                     kl_divergence_error.data.storage().tolist()[0],
-                    reverse_cycle_loss.data.storage().tolist()[0]
+                    reverse_cycle_loss.data.storage().tolist()[0],
+                    discriminator_f_loss.data.storage().tolist()[0],
+                    discriminator_r_loss.data.storage().tolist()[0]
                 ))
 
             # write to tensorboard
@@ -259,6 +263,10 @@ def training_procedure(FLAGS):
             writer.add_scalar('KL-Divergence loss', kl_divergence_error.data.storage().tolist()[0],
                               epoch * (int(len(paired_mnist) / FLAGS.batch_size) + 1) + iteration)
             writer.add_scalar('Reverse cycle loss', reverse_cycle_loss.data.storage().tolist()[0],
+                              epoch * (int(len(paired_mnist) / FLAGS.batch_size) + 1) + iteration)
+            writer.add_scalar('Discriminator F loss', discriminator_f_loss.data.storage().tolist()[0],
+                              epoch * (int(len(paired_mnist) / FLAGS.batch_size) + 1) + iteration)
+            writer.add_scalar('Discriminator R loss', discriminator_r_loss.data.storage().tolist()[0],
                               epoch * (int(len(paired_mnist) / FLAGS.batch_size) + 1) + iteration)
 
         # save model after every 5 epochs
