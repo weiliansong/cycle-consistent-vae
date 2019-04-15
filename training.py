@@ -11,7 +11,7 @@ from tensorboardX import SummaryWriter
 from utils import weights_init
 from utils import transform_config
 from data_loader import MNIST_Paired
-from networks import Encoder, Decoder
+from networks import Encoder, Decoder, Discriminator
 from torch.utils.data import DataLoader
 from utils import imshow_grid, mse_loss, reparameterize, l1_loss
 
@@ -26,8 +26,12 @@ def training_procedure(FLAGS):
     decoder = Decoder(style_dim=FLAGS.style_dim, class_dim=FLAGS.class_dim)
     decoder.apply(weights_init)
 
+    discriminator = Discriminator()
+    discriminator.apply(weights_init)
+
     # load saved models if load_saved flag is true
     if FLAGS.load_saved:
+        raise Exception('This is not implemented')
         encoder.load_state_dict(torch.load(os.path.join('checkpoints', FLAGS.encoder_save)))
         decoder.load_state_dict(torch.load(os.path.join('checkpoints', FLAGS.decoder_save)))
 
@@ -45,6 +49,7 @@ def training_procedure(FLAGS):
     loss definitions
     """
     cross_entropy_loss = nn.CrossEntropyLoss()
+    adversarial_loss = nn.BCELoss()
 
     '''
     add option to run on GPU
@@ -52,8 +57,10 @@ def training_procedure(FLAGS):
     if FLAGS.cuda:
         encoder.cuda()
         decoder.cuda()
+        discriminator.cuda()
 
         cross_entropy_loss.cuda()
+        adversarial_loss.cuda()
 
         X_1 = X_1.cuda()
         X_2 = X_2.cuda()
@@ -76,9 +83,19 @@ def training_procedure(FLAGS):
         betas=(FLAGS.beta_1, FLAGS.beta_2)
     )
 
+    discriminator_optimizer = optim.Adam(
+        list(discriminator.parameters()),
+        lr=FLAGS.initial_learning_rate,
+        betas=(FLAGS.beta_1, FLAGS.beta_2)
+    )
+
     # divide the learning rate by a factor of 10 after 80 epochs
     auto_encoder_scheduler = optim.lr_scheduler.StepLR(auto_encoder_optimizer, step_size=80, gamma=0.1)
     reverse_cycle_scheduler = optim.lr_scheduler.StepLR(reverse_cycle_optimizer, step_size=80, gamma=0.1)
+    discriminator_scheduler = optim.lr_scheduler.StepLR(discriminator_optimizer, step_size=80, gamma=0.1)
+
+    # Used later to define discriminator ground truths
+    Tensor = torch.cuda.FloatTensor if FLAGS.cuda else torch.FloatTensor
 
     """
     training
@@ -95,7 +112,7 @@ def training_procedure(FLAGS):
     # load_saved is false when training is started from 0th iteration
     if not FLAGS.load_saved:
         with open(FLAGS.log_file, 'w') as log:
-            log.write('Epoch\tIteration\tReconstruction_loss\tKL_divergence_loss\tReverse_cycle_loss\n')
+            log.write('Epoch\tIteration\tReconstruction_loss\tKL_divergence_loss\tReverse_cycle_loss\tDiscriminator_loss\n')
 
     # load data set and create data loader instance
     print('Loading MNIST paired dataset...')
@@ -112,8 +129,13 @@ def training_procedure(FLAGS):
         # update the learning rate scheduler
         auto_encoder_scheduler.step()
         reverse_cycle_scheduler.step()
+        discriminator_scheduler.step()
 
         for iteration in range(int(len(paired_mnist) / FLAGS.batch_size)):
+            # Adversarial ground truths
+            valid = Variable(Tensor(FLAGS.batch_size, 1).fill_(1.0), requires_grad=False)
+            fake = Variable(Tensor(FLAGS.batch_size, 1).fill_(0.0), requires_grad=False)
+
             # A. run the auto-encoder reconstruction
             image_batch_1, image_batch_2, _ = next(loader)
 
@@ -154,6 +176,20 @@ def training_procedure(FLAGS):
 
             auto_encoder_optimizer.step()
 
+            # A-1. Discriminator training during forward cycle
+            if True:
+              discriminator_optimizer.zero_grad()
+
+              real_loss_1 = adversarial_loss(discriminator(Variable(X_1)), valid)
+              real_loss_2 = adversarial_loss(discriminator(Variable(X_2)), valid)
+              fake_loss_1 = adversarial_loss(discriminator(Variable(reconstructed_X_1)), fake)
+              fake_loss_2 = adversarial_loss(discriminator(Variable(reconstructed_X_2)), fake)
+
+              discriminator_loss = (real_loss_1 + real_loss_2 + fake_loss_1 + fake_loss_2) / 4.0
+              discriminator_loss.backward()
+
+              discriminator_optimizer.step()
+
             # B. reverse cycle
             image_batch_1, _, __ = next(loader)
             image_batch_2, _, __ = next(loader)
@@ -182,6 +218,20 @@ def training_procedure(FLAGS):
             reverse_cycle_loss /= FLAGS.reverse_cycle_coef
 
             reverse_cycle_optimizer.step()
+
+            # B-1. Discriminator training during reverse cycle
+            if True:
+              discriminator_optimizer.zero_grad()
+
+              real_loss_1 = adversarial_loss(discriminator(Variable(X_1)), valid)
+              real_loss_2 = adversarial_loss(discriminator(Variable(X_2)), valid)
+              fake_loss_1 = adversarial_loss(discriminator(Variable(reconstructed_X_1)), fake)
+              fake_loss_2 = adversarial_loss(discriminator(Variable(reconstructed_X_2)), fake)
+
+              discriminator_loss = (real_loss_1 + real_loss_2 + fake_loss_1 + fake_loss_2) / 4.0
+              discriminator_loss.backward()
+
+              discriminator_optimizer.step()
 
             if (iteration + 1) % 10 == 0:
                 print('')

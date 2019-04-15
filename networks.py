@@ -1,3 +1,5 @@
+import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -54,9 +56,11 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
 
         # Style embeddings input
+        # NOTE This is interesting, the latent vectors are simply embeddings, used to retrive something bigger
         self.style_input = nn.Linear(in_features=style_dim, out_features=256, bias=True)
 
         # Class embeddings input
+        # NOTE Same with the class latent as well, see above note
         self.class_input = nn.Linear(in_features=class_dim, out_features=256, bias=True)
 
         self.deconv_model = nn.Sequential(OrderedDict([
@@ -107,6 +111,27 @@ class Classifier(nn.Module):
 
         return x
 
+class Discriminator(nn.Module):
+    def __init__(self):
+        super(Discriminator, self).__init__()
+
+        # Shape of the output of the generator
+        img_shape = [1, 28, 28]
+
+        self.dis_model = nn.Sequential(
+            nn.Linear(int(np.prod(img_shape)), 512),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(512, 256),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(256, 1),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, img):
+        img_flat = img.view(img.size(0), -1)
+        validity = self.dis_model(img_flat)
+
+        return validity
 
 if __name__ == '__main__':
     """
