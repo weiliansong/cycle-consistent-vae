@@ -182,6 +182,18 @@ def training_procedure(FLAGS):
 
             # A-1. Discriminator training during forward cycle
             if True:
+              # Training generator
+              auto_encoder_optimizer.zero_grad()
+
+              g_loss_1 = adversarial_loss(discriminator(Variable(reconstructed_X_1)), valid)
+              g_loss_2 = adversarial_loss(discriminator(Variable(reconstructed_X_2)), valid)
+
+              gen_f_loss = g_loss_1 + g_loss_2
+              gen_f_loss.backward()
+
+              auto_encoder_optimizer.step()
+
+              # Training discriminator
               discriminator_optimizer.zero_grad()
 
               real_loss_1 = adversarial_loss(discriminator(Variable(X_1)), valid)
@@ -225,6 +237,18 @@ def training_procedure(FLAGS):
 
             # B-1. Discriminator training during reverse cycle
             if True:
+              # Training generator
+              auto_encoder_optimizer.zero_grad()
+
+              g_loss_1 = adversarial_loss(discriminator(Variable(reconstructed_X_1)), valid)
+              g_loss_2 = adversarial_loss(discriminator(Variable(reconstructed_X_2)), valid)
+
+              gen_r_loss = g_loss_1 + g_loss_2
+              gen_r_loss.backward()
+
+              auto_encoder_optimizer.step()
+
+              # Training discriminator
               discriminator_optimizer.zero_grad()
 
               real_loss_1 = adversarial_loss(discriminator(Variable(X_1)), valid)
@@ -246,6 +270,8 @@ def training_procedure(FLAGS):
                 print('Reconstruction loss: ' + str(reconstruction_error.data.storage().tolist()[0]))
                 print('KL-Divergence loss: ' + str(kl_divergence_error.data.storage().tolist()[0]))
                 print('Reverse cycle loss: ' + str(reverse_cycle_loss.data.storage().tolist()[0]))
+                print('Generator F loss: ' + str(gen_f_loss.data.storage().tolist()[0]))
+                print('Generator R loss: ' + str(gen_r_loss.data.storage().tolist()[0]))
                 print('Discriminator F loss: ' + str(discriminator_f_loss.data.storage().tolist()[0]))
                 print('Discriminator R loss: ' + str(discriminator_r_loss.data.storage().tolist()[0]))
 
