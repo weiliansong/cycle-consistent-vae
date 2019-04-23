@@ -119,6 +119,10 @@ def training_procedure(FLAGS):
     paired_mnist = MNIST_Paired(root='mnist', download=True, train=True, transform=transform_config)
     loader = cycle(DataLoader(paired_mnist, batch_size=FLAGS.batch_size, shuffle=True, num_workers=0, drop_last=True))
 
+    # Save a batch of images to use for visualization
+    image_sample_1, image_sample_2, _ = next(loader)
+    image_sample_3, _, _ = next(loader)
+
     # initialize summary writer
     writer = SummaryWriter()
 
@@ -277,12 +281,10 @@ def training_procedure(FLAGS):
             """
             save reconstructed images and style swapped image generations to check progress
             """
-            image_batch_1, image_batch_2, _ = next(loader)
-            image_batch_3, _, __ = next(loader)
 
-            X_1.copy_(image_batch_1)
-            X_2.copy_(image_batch_2)
-            X_3.copy_(image_batch_3)
+            X_1.copy_(image_sample_1)
+            X_2.copy_(image_sample_2)
+            X_3.copy_(image_sample_3)
 
             style_mu_1, style_logvar_1, _ = encoder(Variable(X_1))
             _, __, class_latent_space_2 = encoder(Variable(X_2))
