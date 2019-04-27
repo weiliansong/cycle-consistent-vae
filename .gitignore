@@ -2,7 +2,8 @@
 .DS_Store
 reconstructed_images/*
 mnist/*
+cifar/*
 __pycache__/*
 log.txt
 runs/*
-
+checkpoints/*

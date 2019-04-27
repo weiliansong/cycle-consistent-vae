@@ -10,7 +10,7 @@ from tensorboardX import SummaryWriter
 
 from utils import weights_init
 from utils import transform_config
-from data_loader import MNIST_Paired
+from data_loader import CIFAR_Paired
 from networks import Encoder, Decoder, Discriminator
 from torch.utils.data import DataLoader
 from utils import imshow_grid, mse_loss, reparameterize, l1_loss
@@ -83,6 +83,12 @@ def training_procedure(FLAGS):
         betas=(FLAGS.beta_1, FLAGS.beta_2)
     )
 
+    generator_optimizer = optim.Adam(
+        list(decoder.parameters()),
+        lr=FLAGS.initial_learning_rate,
+        betas=(FLAGS.beta_1, FLAGS.beta_2)
+    )
+
     discriminator_optimizer = optim.Adam(
         list(discriminator.parameters()),
         lr=FLAGS.initial_learning_rate,
@@ -92,6 +98,7 @@ def training_procedure(FLAGS):
     # divide the learning rate by a factor of 10 after 80 epochs
     auto_encoder_scheduler = optim.lr_scheduler.StepLR(auto_encoder_optimizer, step_size=80, gamma=0.1)
     reverse_cycle_scheduler = optim.lr_scheduler.StepLR(reverse_cycle_optimizer, step_size=80, gamma=0.1)
+    generator_scheduler = optim.lr_scheduler.StepLR(generator_optimizer, step_size=80, gamma=0.1)
     discriminator_scheduler = optim.lr_scheduler.StepLR(discriminator_optimizer, step_size=80, gamma=0.1)
 
     # Used later to define discriminator ground truths
@@ -115,9 +122,9 @@ def training_procedure(FLAGS):
             log.write('Epoch\tIteration\tReconstruction_loss\tKL_divergence_loss\tReverse_cycle_loss\tDiscriminator_loss\n')
 
     # load data set and create data loader instance
-    print('Loading MNIST paired dataset...')
-    paired_mnist = MNIST_Paired(root='mnist', download=True, train=True, transform=transform_config)
-    loader = cycle(DataLoader(paired_mnist, batch_size=FLAGS.batch_size, shuffle=True, num_workers=0, drop_last=True))
+    print('Loading CIFAR paired dataset...')
+    paired_cifar = CIFAR_Paired(root='cifar', download=True, train=True, transform=transform_config)
+    loader = cycle(DataLoader(paired_cifar, batch_size=FLAGS.batch_size, shuffle=True, num_workers=0, drop_last=True))
 
     # Save a batch of images to use for visualization
     image_sample_1, image_sample_2, _ = next(loader)
@@ -133,9 +140,10 @@ def training_procedure(FLAGS):
         # update the learning rate scheduler
         auto_encoder_scheduler.step()
         reverse_cycle_scheduler.step()
+        generator_scheduler.step()
         discriminator_scheduler.step()
 
-        for iteration in range(int(len(paired_mnist) / FLAGS.batch_size)):
+        for iteration in range(int(len(paired_cifar) / FLAGS.batch_size)):
             # Adversarial ground truths
             valid = Variable(Tensor(FLAGS.batch_size, 1).fill_(1.0), requires_grad=False)
             fake = Variable(Tensor(FLAGS.batch_size, 1).fill_(0.0), requires_grad=False)
@@ -183,15 +191,15 @@ def training_procedure(FLAGS):
             # A-1. Discriminator training during forward cycle
             if True:
               # Training generator
-              auto_encoder_optimizer.zero_grad()
+              generator_optimizer.zero_grad()
 
               g_loss_1 = adversarial_loss(discriminator(Variable(reconstructed_X_1)), valid)
               g_loss_2 = adversarial_loss(discriminator(Variable(reconstructed_X_2)), valid)
 
-              gen_f_loss = g_loss_1 + g_loss_2
+              gen_f_loss = (g_loss_1 + g_loss_2) / 2.0
               gen_f_loss.backward()
 
-              auto_encoder_optimizer.step()
+              generator_optimizer.step()
 
               # Training discriminator
               discriminator_optimizer.zero_grad()
@@ -201,8 +209,8 @@ def training_procedure(FLAGS):
               fake_loss_1 = adversarial_loss(discriminator(Variable(reconstructed_X_1)), fake)
               fake_loss_2 = adversarial_loss(discriminator(Variable(reconstructed_X_2)), fake)
 
-              discriminator_f_loss = (real_loss_1 + real_loss_2 + fake_loss_1 + fake_loss_2) / 4.0
-              discriminator_f_loss.backward()
+              dis_f_loss = (real_loss_1 + real_loss_2 + fake_loss_1 + fake_loss_2) / 4.0
+              dis_f_loss.backward()
 
               discriminator_optimizer.step()
 
@@ -238,15 +246,15 @@ def training_procedure(FLAGS):
             # B-1. Discriminator training during reverse cycle
             if True:
               # Training generator
-              auto_encoder_optimizer.zero_grad()
+              generator_optimizer.zero_grad()
 
               g_loss_1 = adversarial_loss(discriminator(Variable(reconstructed_X_1)), valid)
               g_loss_2 = adversarial_loss(discriminator(Variable(reconstructed_X_2)), valid)
 
-              gen_r_loss = g_loss_1 + g_loss_2
+              gen_r_loss = (g_loss_1 + g_loss_2) / 2.0
               gen_r_loss.backward()
 
-              auto_encoder_optimizer.step()
+              generator_optimizer.step()
 
               # Training discriminator
               discriminator_optimizer.zero_grad()
@@ -256,8 +264,8 @@ def training_procedure(FLAGS):
               fake_loss_1 = adversarial_loss(discriminator(Variable(reconstructed_X_1)), fake)
               fake_loss_2 = adversarial_loss(discriminator(Variable(reconstructed_X_2)), fake)
 
-              discriminator_r_loss = (real_loss_1 + real_loss_2 + fake_loss_1 + fake_loss_2) / 4.0
-              discriminator_r_loss.backward()
+              dis_r_loss = (real_loss_1 + real_loss_2 + fake_loss_1 + fake_loss_2) / 4.0
+              dis_r_loss.backward()
 
               discriminator_optimizer.step()
 
@@ -272,8 +280,8 @@ def training_procedure(FLAGS):
                 print('Reverse cycle loss: ' + str(reverse_cycle_loss.data.storage().tolist()[0]))
                 print('Generator F loss: ' + str(gen_f_loss.data.storage().tolist()[0]))
                 print('Generator R loss: ' + str(gen_r_loss.data.storage().tolist()[0]))
-                print('Discriminator F loss: ' + str(discriminator_f_loss.data.storage().tolist()[0]))
-                print('Discriminator R loss: ' + str(discriminator_r_loss.data.storage().tolist()[0]))
+                print('Discriminator F loss: ' + str(dis_f_loss.data.storage().tolist()[0]))
+                print('Discriminator R loss: ' + str(dis_r_loss.data.storage().tolist()[0]))
 
             # write to log
             with open(FLAGS.log_file, 'a') as log:
@@ -283,21 +291,21 @@ def training_procedure(FLAGS):
                     reconstruction_error.data.storage().tolist()[0],
                     kl_divergence_error.data.storage().tolist()[0],
                     reverse_cycle_loss.data.storage().tolist()[0],
-                    discriminator_f_loss.data.storage().tolist()[0],
-                    discriminator_r_loss.data.storage().tolist()[0]
+                    dis_f_loss.data.storage().tolist()[0],
+                    dis_r_loss.data.storage().tolist()[0]
                 ))
 
             # write to tensorboard
             writer.add_scalar('Reconstruction loss', reconstruction_error.data.storage().tolist()[0],
-                              epoch * (int(len(paired_mnist) / FLAGS.batch_size) + 1) + iteration)
+                              epoch * (int(len(paired_cifar) / FLAGS.batch_size) + 1) + iteration)
             writer.add_scalar('KL-Divergence loss', kl_divergence_error.data.storage().tolist()[0],
-                              epoch * (int(len(paired_mnist) / FLAGS.batch_size) + 1) + iteration)
+                              epoch * (int(len(paired_cifar) / FLAGS.batch_size) + 1) + iteration)
             writer.add_scalar('Reverse cycle loss', reverse_cycle_loss.data.storage().tolist()[0],
-                              epoch * (int(len(paired_mnist) / FLAGS.batch_size) + 1) + iteration)
-            writer.add_scalar('Discriminator F loss', discriminator_f_loss.data.storage().tolist()[0],
-                              epoch * (int(len(paired_mnist) / FLAGS.batch_size) + 1) + iteration)
-            writer.add_scalar('Discriminator R loss', discriminator_r_loss.data.storage().tolist()[0],
-                              epoch * (int(len(paired_mnist) / FLAGS.batch_size) + 1) + iteration)
+                              epoch * (int(len(paired_cifar) / FLAGS.batch_size) + 1) + iteration)
+            writer.add_scalar('Discriminator F loss', dis_f_loss.data.storage().tolist()[0],
+                              epoch * (int(len(paired_cifar) / FLAGS.batch_size) + 1) + iteration)
+            writer.add_scalar('Discriminator R loss', dis_r_loss.data.storage().tolist()[0],
+                              epoch * (int(len(paired_cifar) / FLAGS.batch_size) + 1) + iteration)
 
         # save model after every 5 epochs
         if (epoch + 1) % 5 == 0 or (epoch + 1) == FLAGS.end_epoch:
@@ -324,19 +332,19 @@ def training_procedure(FLAGS):
 
             # save input image batch
             image_batch = np.transpose(X_1.cpu().numpy(), (0, 2, 3, 1))
-            image_batch = np.concatenate((image_batch, image_batch, image_batch), axis=3)
+            # image_batch = np.concatenate((image_batch, image_batch, image_batch), axis=3)
             imshow_grid(image_batch, name=str(epoch) + '_original', save=True)
 
             # save reconstructed batch
             reconstructed_x = np.transpose(reconstructed_X_1_2.cpu().data.numpy(), (0, 2, 3, 1))
-            reconstructed_x = np.concatenate((reconstructed_x, reconstructed_x, reconstructed_x), axis=3)
+            # reconstructed_x = np.concatenate((reconstructed_x, reconstructed_x, reconstructed_x), axis=3)
             imshow_grid(reconstructed_x, name=str(epoch) + '_target', save=True)
 
             style_batch = np.transpose(X_3.cpu().numpy(), (0, 2, 3, 1))
-            style_batch = np.concatenate((style_batch, style_batch, style_batch), axis=3)
+            # style_batch = np.concatenate((style_batch, style_batch, style_batch), axis=3)
             imshow_grid(style_batch, name=str(epoch) + '_style', save=True)
 
             # save style swapped reconstructed batch
             reconstructed_style = np.transpose(reconstructed_X_3_2.cpu().data.numpy(), (0, 2, 3, 1))
-            reconstructed_style = np.concatenate((reconstructed_style, reconstructed_style, reconstructed_style), axis=3)
+            # reconstructed_style = np.concatenate((reconstructed_style, reconstructed_style, reconstructed_style), axis=3)
             imshow_grid(reconstructed_style, name=str(epoch) + '_style_target', save=True)

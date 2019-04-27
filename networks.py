@@ -18,7 +18,7 @@ class Encoder(nn.Module):
 
         self.conv_model = nn.Sequential(OrderedDict([
             ('convolution_1',
-             nn.Conv2d(in_channels=1, out_channels=16, kernel_size=5, stride=2, padding=1, bias=True)),
+             nn.Conv2d(in_channels=3, out_channels=16, kernel_size=5, stride=2, padding=1, bias=True)),
             ('convolution_1_in', nn.InstanceNorm2d(num_features=16, track_running_stats=True)),
             ('ReLU_1', nn.ReLU(inplace=True)),
 
@@ -75,7 +75,7 @@ class Decoder(nn.Module):
             ('LeakyReLU_2', nn.LeakyReLU(negative_slope=0.2, inplace=True)),
 
             ('deconvolution_3',
-             nn.ConvTranspose2d(in_channels=16, out_channels=1, kernel_size=4, stride=2, padding=1, bias=True)),
+             nn.ConvTranspose2d(in_channels=16, out_channels=3, kernel_size=4, stride=2, padding=1, bias=True)),
             ('sigmoid_final', nn.Sigmoid())
         ]))
 
@@ -116,7 +116,7 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
 
         # Shape of the output of the generator
-        img_shape = [1, 28, 28]
+        img_shape = [3, 28, 28]
 
         self.dis_model = nn.Sequential(
             nn.Linear(int(np.prod(img_shape)), 512),

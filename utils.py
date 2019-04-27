@@ -3,11 +3,11 @@ import torch.nn as nn
 import matplotlib.pyplot as plt
 from torch.autograd import Variable
 from mpl_toolkits.axes_grid1 import ImageGrid
-from torchvision.transforms import Compose, ToTensor
+from torchvision.transforms import Compose, ToTensor, CenterCrop
 
 
 # compose a transform configuration
-transform_config = Compose([ToTensor()])
+transform_config = Compose([CenterCrop(28), ToTensor()])
 
 
 def mse_loss(input, target):
