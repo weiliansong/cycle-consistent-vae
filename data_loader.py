@@ -6,6 +6,47 @@ from utils import imshow_grid, transform_config
 from torchvision import datasets
 from torch.utils.data import Dataset, DataLoader
 
+class DSPRITES_Paired(Dataset):
+  def __init__(self, train=True, transform=transform_config):
+
+    # Load and unpack data
+    dsprites_zip = np.load('dsprites_ndarray_co1sh3sc6or40x32y32_64x64.npz', encoding='latin1')
+    self.imgs = dsprites_zip['imgs']
+    self.meta = dsprites_zip['metadata'][()]
+    self.latent_values = dsprites_zip['latents_values']
+    self.latent_classes = dsprites_zip['latents_classes']
+
+  def __len__(self):
+    return len(self.imgs)
+
+  def __getitem__(self, idx):
+    latents_sizes = self.meta['latents_sizes']
+    latents_bases = np.concatenate((latents_sizes[::-1].cumprod()[::-1][1:],
+                                    np.array([1,])))
+
+    # keeping the first four latents fixed
+    a = np.random.choice(latents_sizes[0])
+    b = np.random.choice(latents_sizes[1])
+    c = np.random.choice(latents_sizes[2])
+    d = np.random.choice(latents_sizes[3])
+
+    # x and y are sampled randomly for each sample
+    x_1 = np.random.choice(latents_sizes[4])
+    x_2 = np.random.choice(latents_sizes[4])
+    y_1 = np.random.choice(latents_sizes[5])
+    y_2 = np.random.choice(latents_sizes[5])
+
+    # assemble the two latent vectors
+    latent_1 = [a, b, c, d, x_1, y_1]
+    latent_2 = [a, b, c, d, x_2, y_2]
+
+    # grab the two images
+    img_idx_1 = np.dot(latent_1, latents_bases).astype(int)
+    img_idx_2 = np.dot(latent_2, latents_bases).astype(int)
+    img_1 = self.imgs[img_idx_1]
+    img_2 = self.imgs[img_idx_2]
+
+    return img_1, img_2, latent_1, latent_2
 
 class MNIST_Paired(Dataset):
     def __init__(self, root='mnist', download=True, train=True, transform=transform_config):

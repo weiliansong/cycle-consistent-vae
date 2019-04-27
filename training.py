@@ -10,7 +10,7 @@ from tensorboardX import SummaryWriter
 
 from utils import weights_init
 from utils import transform_config
-from data_loader import CIFAR_Paired
+from data_loader import CIFAR_Paired, DSPRITES_Paired
 from networks import Encoder, Decoder, Discriminator
 from torch.utils.data import DataLoader
 from utils import imshow_grid, mse_loss, reparameterize, l1_loss
@@ -121,14 +121,19 @@ def training_procedure(FLAGS):
         with open(FLAGS.log_file, 'w') as log:
             log.write('Epoch\tIteration\tReconstruction_loss\tKL_divergence_loss\tReverse_cycle_loss\tDiscriminator_loss\n')
 
+    # NOTE not using CIFAR
+    # print('Loading CIFAR paired dataset...')
+    # paired_cifar = CIFAR_Paired(root='cifar', download=True, train=True, transform=transform_config)
+    # loader = cycle(DataLoader(paired_cifar, batch_size=FLAGS.batch_size, shuffle=True, num_workers=0, drop_last=True))
+
     # load data set and create data loader instance
-    print('Loading CIFAR paired dataset...')
-    paired_cifar = CIFAR_Paired(root='cifar', download=True, train=True, transform=transform_config)
-    loader = cycle(DataLoader(paired_cifar, batch_size=FLAGS.batch_size, shuffle=True, num_workers=0, drop_last=True))
+    print('Loading DSPRITES paired dataset...')
+    paired_dsprites = DSPRITES_Paired(train=True, transform=transform_config)
+    loader = cycle(DataLoader(paired_dsprites, batch_size=FLAGS.batch_size, shuffle=True, num_workers=0, drop_last=True))
 
     # Save a batch of images to use for visualization
-    image_sample_1, image_sample_2, _ = next(loader)
-    image_sample_3, _, _ = next(loader)
+    image_sample_1, image_sample_2, _, _ = next(loader)
+    image_sample_3, _, _, _ = next(loader)
 
     # initialize summary writer
     writer = SummaryWriter()
