@@ -18,7 +18,7 @@ class Encoder(nn.Module):
 
         self.conv_model = nn.Sequential(OrderedDict([
             ('convolution_1',
-             nn.Conv2d(in_channels=3, out_channels=16, kernel_size=5, stride=2, padding=1, bias=True)),
+             nn.Conv2d(in_channels=1, out_channels=16, kernel_size=5, stride=2, padding=1, bias=True)),
             ('convolution_1_in', nn.InstanceNorm2d(num_features=16, track_running_stats=True)),
             ('ReLU_1', nn.ReLU(inplace=True)),
 
@@ -30,8 +30,18 @@ class Encoder(nn.Module):
             ('convolution_3',
              nn.Conv2d(in_channels=32, out_channels=64, kernel_size=5, stride=2, padding=1, bias=True)),
             ('convolution_3_in', nn.InstanceNorm2d(num_features=64, track_running_stats=True)),
-            ('ReLU_3', nn.ReLU(inplace=True))
+            ('ReLU_3', nn.ReLU(inplace=True)),
+
+            ('convolution_4',
+             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=6, stride=2, padding=1, bias=True)),
+            ('convolution_4_in', nn.InstanceNorm2d(num_features=64, track_running_stats=True)),
+            ('ReLU_4', nn.ReLU(inplace=True))
         ]))
+
+        # from torchsummary import summary
+        # self.conv_model = self.conv_model.to('cuda')
+        # summary(self.conv_model, input_size=(1, 64, 64))
+        # exit(0)
 
         # Style embeddings
         self.style_mu = nn.Linear(in_features=256, out_features=style_dim, bias=True)
@@ -75,9 +85,19 @@ class Decoder(nn.Module):
             ('LeakyReLU_2', nn.LeakyReLU(negative_slope=0.2, inplace=True)),
 
             ('deconvolution_3',
-             nn.ConvTranspose2d(in_channels=16, out_channels=3, kernel_size=4, stride=2, padding=1, bias=True)),
+             nn.ConvTranspose2d(in_channels=16, out_channels=16, kernel_size=5, stride=2, padding=0, bias=True)),
+            ('deconvolution_3_in', nn.InstanceNorm2d(num_features=16, track_running_stats=True)),
+            ('LeakyReLU_3', nn.LeakyReLU(negative_slope=0.2, inplace=True)),
+
+            ('deconvolution_4',
+             nn.ConvTranspose2d(in_channels=16, out_channels=1, kernel_size=6, stride=2, padding=1, bias=True)),
             ('sigmoid_final', nn.Sigmoid())
         ]))
+
+        # from torchsummary import summary
+        # self.deconv_model = self.deconv_model.to('cuda')
+        # summary(self.deconv_model, input_size=(128, 2, 2))
+        # exit(0)
 
     def forward(self, style_embeddings, class_embeddings):
         style_embeddings = F.leaky_relu_(self.style_input(style_embeddings), negative_slope=0.2)
@@ -110,28 +130,6 @@ class Classifier(nn.Module):
         x = self.fc_model(z)
 
         return x
-
-class Discriminator(nn.Module):
-    def __init__(self):
-        super(Discriminator, self).__init__()
-
-        # Shape of the output of the generator
-        img_shape = [3, 28, 28]
-
-        self.dis_model = nn.Sequential(
-            nn.Linear(int(np.prod(img_shape)), 512),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(512, 256),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(256, 1),
-            nn.Sigmoid(),
-        )
-
-    def forward(self, img):
-        img_flat = img.view(img.size(0), -1)
-        validity = self.dis_model(img_flat)
-
-        return validity
 
 if __name__ == '__main__':
     """

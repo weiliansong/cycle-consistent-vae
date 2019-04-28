@@ -11,7 +11,7 @@ class DSPRITES_Paired(Dataset):
 
     # Load and unpack data
     dsprites_zip = np.load('dsprites_ndarray_co1sh3sc6or40x32y32_64x64.npz', encoding='latin1')
-    self.imgs = dsprites_zip['imgs']
+    self.imgs = dsprites_zip['imgs'].reshape((-1, 1, 64, 64))
     self.meta = dsprites_zip['metadata'][()]
     self.latent_values = dsprites_zip['latents_values']
     self.latent_classes = dsprites_zip['latents_classes']

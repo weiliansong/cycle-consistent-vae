@@ -11,10 +11,11 @@ from tensorboardX import SummaryWriter
 from utils import weights_init
 from utils import transform_config
 from data_loader import CIFAR_Paired, DSPRITES_Paired
-from networks import Encoder, Decoder, Discriminator
+from networks import Encoder, Decoder
 from torch.utils.data import DataLoader
 from utils import imshow_grid, mse_loss, reparameterize, l1_loss
 
+import matplotlib.pyplot as plt
 
 def training_procedure(FLAGS):
     """
@@ -25,9 +26,6 @@ def training_procedure(FLAGS):
 
     decoder = Decoder(style_dim=FLAGS.style_dim, class_dim=FLAGS.class_dim)
     decoder.apply(weights_init)
-
-    discriminator = Discriminator()
-    discriminator.apply(weights_init)
 
     # load saved models if load_saved flag is true
     if FLAGS.load_saved:
@@ -49,7 +47,6 @@ def training_procedure(FLAGS):
     loss definitions
     """
     cross_entropy_loss = nn.CrossEntropyLoss()
-    adversarial_loss = nn.BCELoss()
 
     '''
     add option to run on GPU
@@ -57,10 +54,8 @@ def training_procedure(FLAGS):
     if FLAGS.cuda:
         encoder.cuda()
         decoder.cuda()
-        discriminator.cuda()
 
         cross_entropy_loss.cuda()
-        adversarial_loss.cuda()
 
         X_1 = X_1.cuda()
         X_2 = X_2.cuda()
@@ -83,23 +78,9 @@ def training_procedure(FLAGS):
         betas=(FLAGS.beta_1, FLAGS.beta_2)
     )
 
-    generator_optimizer = optim.Adam(
-        list(decoder.parameters()),
-        lr=FLAGS.initial_learning_rate,
-        betas=(FLAGS.beta_1, FLAGS.beta_2)
-    )
-
-    discriminator_optimizer = optim.Adam(
-        list(discriminator.parameters()),
-        lr=FLAGS.initial_learning_rate,
-        betas=(FLAGS.beta_1, FLAGS.beta_2)
-    )
-
     # divide the learning rate by a factor of 10 after 80 epochs
     auto_encoder_scheduler = optim.lr_scheduler.StepLR(auto_encoder_optimizer, step_size=80, gamma=0.1)
     reverse_cycle_scheduler = optim.lr_scheduler.StepLR(reverse_cycle_optimizer, step_size=80, gamma=0.1)
-    generator_scheduler = optim.lr_scheduler.StepLR(generator_optimizer, step_size=80, gamma=0.1)
-    discriminator_scheduler = optim.lr_scheduler.StepLR(discriminator_optimizer, step_size=80, gamma=0.1)
 
     # Used later to define discriminator ground truths
     Tensor = torch.cuda.FloatTensor if FLAGS.cuda else torch.FloatTensor
@@ -132,8 +113,13 @@ def training_procedure(FLAGS):
     loader = cycle(DataLoader(paired_dsprites, batch_size=FLAGS.batch_size, shuffle=True, num_workers=0, drop_last=True))
 
     # Save a batch of images to use for visualization
-    image_sample_1, image_sample_2, _, _ = next(loader)
-    image_sample_3, _, _, _ = next(loader)
+    # image_sample_1, image_sample_2, _, _ = next(loader)
+    # image_sample_3, _, _, _ = next(loader)
+    # for pair_idx, (img_1, img_2) in enumerate(zip(image_sample_1, image_sample_2)):
+    #   plt.imshow(img_1, cmap='gray')
+    #   plt.savefig('tmp/%02d_0.png' % pair_idx)
+    #   plt.imshow(img_2, cmap='gray')
+    #   plt.savefig('tmp/%02d_1.png' % pair_idx)
 
     # initialize summary writer
     writer = SummaryWriter()
@@ -145,16 +131,10 @@ def training_procedure(FLAGS):
         # update the learning rate scheduler
         auto_encoder_scheduler.step()
         reverse_cycle_scheduler.step()
-        generator_scheduler.step()
-        discriminator_scheduler.step()
 
-        for iteration in range(int(len(paired_cifar) / FLAGS.batch_size)):
-            # Adversarial ground truths
-            valid = Variable(Tensor(FLAGS.batch_size, 1).fill_(1.0), requires_grad=False)
-            fake = Variable(Tensor(FLAGS.batch_size, 1).fill_(0.0), requires_grad=False)
-
+        for iteration in range(int(len(paired_dsprites) / FLAGS.batch_size)):
             # A. run the auto-encoder reconstruction
-            image_batch_1, image_batch_2, _ = next(loader)
+            image_batch_1, image_batch_2, _, _ = next(loader)
 
             auto_encoder_optimizer.zero_grad()
 
@@ -193,35 +173,9 @@ def training_procedure(FLAGS):
 
             auto_encoder_optimizer.step()
 
-            # A-1. Discriminator training during forward cycle
-            if True:
-              # Training generator
-              generator_optimizer.zero_grad()
-
-              g_loss_1 = adversarial_loss(discriminator(Variable(reconstructed_X_1)), valid)
-              g_loss_2 = adversarial_loss(discriminator(Variable(reconstructed_X_2)), valid)
-
-              gen_f_loss = (g_loss_1 + g_loss_2) / 2.0
-              gen_f_loss.backward()
-
-              generator_optimizer.step()
-
-              # Training discriminator
-              discriminator_optimizer.zero_grad()
-
-              real_loss_1 = adversarial_loss(discriminator(Variable(X_1)), valid)
-              real_loss_2 = adversarial_loss(discriminator(Variable(X_2)), valid)
-              fake_loss_1 = adversarial_loss(discriminator(Variable(reconstructed_X_1)), fake)
-              fake_loss_2 = adversarial_loss(discriminator(Variable(reconstructed_X_2)), fake)
-
-              dis_f_loss = (real_loss_1 + real_loss_2 + fake_loss_1 + fake_loss_2) / 4.0
-              dis_f_loss.backward()
-
-              discriminator_optimizer.step()
-
             # B. reverse cycle
-            image_batch_1, _, __ = next(loader)
-            image_batch_2, _, __ = next(loader)
+            image_batch_1, _, _, _ = next(loader)
+            image_batch_2, _, _, _ = next(loader)
 
             reverse_cycle_optimizer.zero_grad()
 
@@ -248,32 +202,6 @@ def training_procedure(FLAGS):
 
             reverse_cycle_optimizer.step()
 
-            # B-1. Discriminator training during reverse cycle
-            if True:
-              # Training generator
-              generator_optimizer.zero_grad()
-
-              g_loss_1 = adversarial_loss(discriminator(Variable(reconstructed_X_1)), valid)
-              g_loss_2 = adversarial_loss(discriminator(Variable(reconstructed_X_2)), valid)
-
-              gen_r_loss = (g_loss_1 + g_loss_2) / 2.0
-              gen_r_loss.backward()
-
-              generator_optimizer.step()
-
-              # Training discriminator
-              discriminator_optimizer.zero_grad()
-
-              real_loss_1 = adversarial_loss(discriminator(Variable(X_1)), valid)
-              real_loss_2 = adversarial_loss(discriminator(Variable(X_2)), valid)
-              fake_loss_1 = adversarial_loss(discriminator(Variable(reconstructed_X_1)), fake)
-              fake_loss_2 = adversarial_loss(discriminator(Variable(reconstructed_X_2)), fake)
-
-              dis_r_loss = (real_loss_1 + real_loss_2 + fake_loss_1 + fake_loss_2) / 4.0
-              dis_r_loss.backward()
-
-              discriminator_optimizer.step()
-
             if (iteration + 1) % 10 == 0:
                 print('')
                 print('Epoch #' + str(epoch))
@@ -283,10 +211,6 @@ def training_procedure(FLAGS):
                 print('Reconstruction loss: ' + str(reconstruction_error.data.storage().tolist()[0]))
                 print('KL-Divergence loss: ' + str(kl_divergence_error.data.storage().tolist()[0]))
                 print('Reverse cycle loss: ' + str(reverse_cycle_loss.data.storage().tolist()[0]))
-                print('Generator F loss: ' + str(gen_f_loss.data.storage().tolist()[0]))
-                print('Generator R loss: ' + str(gen_r_loss.data.storage().tolist()[0]))
-                print('Discriminator F loss: ' + str(dis_f_loss.data.storage().tolist()[0]))
-                print('Discriminator R loss: ' + str(dis_r_loss.data.storage().tolist()[0]))
 
             # write to log
             with open(FLAGS.log_file, 'a') as log:
@@ -296,21 +220,15 @@ def training_procedure(FLAGS):
                     reconstruction_error.data.storage().tolist()[0],
                     kl_divergence_error.data.storage().tolist()[0],
                     reverse_cycle_loss.data.storage().tolist()[0],
-                    dis_f_loss.data.storage().tolist()[0],
-                    dis_r_loss.data.storage().tolist()[0]
                 ))
 
             # write to tensorboard
             writer.add_scalar('Reconstruction loss', reconstruction_error.data.storage().tolist()[0],
-                              epoch * (int(len(paired_cifar) / FLAGS.batch_size) + 1) + iteration)
+                              epoch * (int(len(paired_dsprites) / FLAGS.batch_size) + 1) + iteration)
             writer.add_scalar('KL-Divergence loss', kl_divergence_error.data.storage().tolist()[0],
-                              epoch * (int(len(paired_cifar) / FLAGS.batch_size) + 1) + iteration)
+                              epoch * (int(len(paired_dsprites) / FLAGS.batch_size) + 1) + iteration)
             writer.add_scalar('Reverse cycle loss', reverse_cycle_loss.data.storage().tolist()[0],
-                              epoch * (int(len(paired_cifar) / FLAGS.batch_size) + 1) + iteration)
-            writer.add_scalar('Discriminator F loss', dis_f_loss.data.storage().tolist()[0],
-                              epoch * (int(len(paired_cifar) / FLAGS.batch_size) + 1) + iteration)
-            writer.add_scalar('Discriminator R loss', dis_r_loss.data.storage().tolist()[0],
-                              epoch * (int(len(paired_cifar) / FLAGS.batch_size) + 1) + iteration)
+                              epoch * (int(len(paired_dsprites) / FLAGS.batch_size) + 1) + iteration)
 
         # save model after every 5 epochs
         if (epoch + 1) % 5 == 0 or (epoch + 1) == FLAGS.end_epoch:
