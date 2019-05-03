@@ -48,7 +48,8 @@ class Encoder(nn.Module):
         self.style_logvar = nn.Linear(in_features=256, out_features=style_dim, bias=True)
 
         # Class embeddings
-        self.class_output = nn.Linear(in_features=256, out_features=class_dim, bias=True)
+        self.class_mu = nn.Linear(in_features=256, out_features=class_dim, bias=True)
+        self.class_logvar = nn.Linear(in_features=256, out_features=class_dim, bias=True)
 
     def forward(self, x):
         x = self.conv_model(x)
@@ -56,9 +57,10 @@ class Encoder(nn.Module):
 
         style_embeddings_mu = self.style_mu(x)
         style_embeddings_logvar = self.style_logvar(x)
-        class_embeddings = self.class_output(x)
+        class_embeddings_mu = self.class_mu(x)
+        class_embeddings_logvar = self.class_logvar(x)
 
-        return style_embeddings_mu, style_embeddings_logvar, class_embeddings
+        return style_embeddings_mu, style_embeddings_logvar, class_embeddings_mu, class_embeddings_logvar
 
 
 class Decoder(nn.Module):

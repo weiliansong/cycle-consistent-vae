@@ -17,7 +17,7 @@ class DSPRITES_Paired(Dataset):
     self.latent_classes = dsprites_zip['latents_classes']
 
   def __len__(self):
-    return len(self.imgs)
+    return len(self.imgs) // 2
 
   def __getitem__(self, idx):
     latents_sizes = self.meta['latents_sizes']

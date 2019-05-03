@@ -19,7 +19,8 @@ parser.add_argument('--num_classes', type=int, default=10, help="number of class
 # 3 reconstruction coef for 64 dim space
 parser.add_argument('--reconstruction_coef', type=float, default=2., help="coefficient for reconstruction term")
 parser.add_argument('--reverse_cycle_coef', type=float, default=10., help="coefficient for reverse cycle loss term")
-parser.add_argument('--kl_divergence_coef', type=float, default=3., help="coefficient for KL-Divergence loss term")
+parser.add_argument('--kl_style_coef', type=float, default=3., help="coefficient for KL-Style loss term")
+parser.add_argument('--kl_class_coef', type=float, default=3., help="coefficient for KL-Class loss term")
 
 parser.add_argument('--beta_1', type=float, default=0.9, help="default beta_1 val for adam")
 parser.add_argument('--beta_2', type=float, default=0.999, help="default beta_2 val for adam")

@@ -53,7 +53,7 @@ def imshow_grid(images, shape=[2, 8], name='default', save=False):
         grid[i].imshow(images[i])  # The AxesGrid object work as a list of axes.
 
     if save:
-        plt.savefig('reconstructed_images/' + str(name) + '.png')
+        plt.savefig(name)
         plt.clf()
     else:
         plt.show()
