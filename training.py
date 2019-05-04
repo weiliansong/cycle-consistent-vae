@@ -119,7 +119,15 @@ def training_procedure(FLAGS):
     # load_saved is false when training is started from 0th iteration
     if not FLAGS.load_saved:
         with open(FLAGS.log_file, 'w') as log:
-            log.write('Epoch\tIteration\tReconstruction_loss\tKL_divergence_loss\tReverse_cycle_loss\tDiscriminator_loss\n')
+            headers = ['Epoch', 'Iteration', 'Reconstruction_loss', 'KL_divergence_loss', 'Reverse_cycle_loss']
+
+            if FLAGS.forward_gan:
+              headers.extend(['Generator_forward_loss', 'Discriminator_forward_loss'])
+
+            if FLAGS.reverse_gan:
+              headers.extend(['Generator_reverse_loss', 'Discriminator_reverse_loss'])
+
+            log.write('\t'.join(headers) + '\n')
 
     # load data set and create data loader instance
     print('Loading CIFAR paired dataset...')
@@ -189,7 +197,7 @@ def training_procedure(FLAGS):
             auto_encoder_optimizer.step()
 
             # A-1. Discriminator training during forward cycle
-            if True:
+            if FLAGS.forward_gan:
               # Training generator
               generator_optimizer.zero_grad()
 
@@ -244,7 +252,7 @@ def training_procedure(FLAGS):
             reverse_cycle_optimizer.step()
 
             # B-1. Discriminator training during reverse cycle
-            if True:
+            if FLAGS.reverse_gan:
               # Training generator
               generator_optimizer.zero_grad()
 
@@ -278,22 +286,35 @@ def training_procedure(FLAGS):
                 print('Reconstruction loss: ' + str(reconstruction_error.data.storage().tolist()[0]))
                 print('KL-Divergence loss: ' + str(kl_divergence_error.data.storage().tolist()[0]))
                 print('Reverse cycle loss: ' + str(reverse_cycle_loss.data.storage().tolist()[0]))
-                print('Generator F loss: ' + str(gen_f_loss.data.storage().tolist()[0]))
-                print('Generator R loss: ' + str(gen_r_loss.data.storage().tolist()[0]))
-                print('Discriminator F loss: ' + str(dis_f_loss.data.storage().tolist()[0]))
-                print('Discriminator R loss: ' + str(dis_r_loss.data.storage().tolist()[0]))
+
+                if FLAGS.forward_gan:
+                  print('Generator F loss: ' + str(gen_f_loss.data.storage().tolist()[0]))
+                  print('Discriminator F loss: ' + str(dis_f_loss.data.storage().tolist()[0]))
+
+                if FLAGS.reverse_gan:
+                  print('Generator R loss: ' + str(gen_r_loss.data.storage().tolist()[0]))
+                  print('Discriminator R loss: ' + str(dis_r_loss.data.storage().tolist()[0]))
 
             # write to log
             with open(FLAGS.log_file, 'a') as log:
-                log.write('{0}\t{1}\t{2}\t{3}\t{4}\n'.format(
-                    epoch,
-                    iteration,
-                    reconstruction_error.data.storage().tolist()[0],
-                    kl_divergence_error.data.storage().tolist()[0],
-                    reverse_cycle_loss.data.storage().tolist()[0],
-                    dis_f_loss.data.storage().tolist()[0],
-                    dis_r_loss.data.storage().tolist()[0]
-                ))
+                row = []
+
+                row.append(epoch)
+                row.append(iteration)
+                row.append(reconstruction_error.data.storage().tolist()[0])
+                row.append(kl_divergence_error.data.storage().tolist()[0])
+                row.append(reverse_cycle_loss.data.storage().tolist()[0])
+
+                if FLAGS.forward_gan:
+                  row.append(gen_f_loss.data.storage().tolist()[0])
+                  row.append(dis_f_loss.data.storage().tolist()[0])
+
+                if FLAGS.reverse_gan:
+                  row.append(gen_r_loss.data.storage().tolist()[0])
+                  row.append(dis_r_loss.data.storage().tolist()[0])
+
+                row = [str(x) for x in row]
+                log.write('\t'.join(row) + '\n')
 
             # write to tensorboard
             writer.add_scalar('Reconstruction loss', reconstruction_error.data.storage().tolist()[0],
@@ -302,10 +323,18 @@ def training_procedure(FLAGS):
                               epoch * (int(len(paired_cifar) / FLAGS.batch_size) + 1) + iteration)
             writer.add_scalar('Reverse cycle loss', reverse_cycle_loss.data.storage().tolist()[0],
                               epoch * (int(len(paired_cifar) / FLAGS.batch_size) + 1) + iteration)
-            writer.add_scalar('Discriminator F loss', dis_f_loss.data.storage().tolist()[0],
-                              epoch * (int(len(paired_cifar) / FLAGS.batch_size) + 1) + iteration)
-            writer.add_scalar('Discriminator R loss', dis_r_loss.data.storage().tolist()[0],
-                              epoch * (int(len(paired_cifar) / FLAGS.batch_size) + 1) + iteration)
+
+            if FLAGS.forward_gan:
+              writer.add_scalar('Generator F loss', gen_f_loss.data.storage().tolist()[0],
+                                epoch * (int(len(paired_cifar) / FLAGS.batch_size) + 1) + iteration)
+              writer.add_scalar('Discriminator F loss', dis_f_loss.data.storage().tolist()[0],
+                                epoch * (int(len(paired_cifar) / FLAGS.batch_size) + 1) + iteration)
+
+            if FLAGS.reverse_gan:
+              writer.add_scalar('Generator R loss', gen_r_loss.data.storage().tolist()[0],
+                                epoch * (int(len(paired_cifar) / FLAGS.batch_size) + 1) + iteration)
+              writer.add_scalar('Discriminator R loss', dis_r_loss.data.storage().tolist()[0],
+                                epoch * (int(len(paired_cifar) / FLAGS.batch_size) + 1) + iteration)
 
         # save model after every 5 epochs
         if (epoch + 1) % 5 == 0 or (epoch + 1) == FLAGS.end_epoch:
@@ -332,19 +361,23 @@ def training_procedure(FLAGS):
 
             # save input image batch
             image_batch = np.transpose(X_1.cpu().numpy(), (0, 2, 3, 1))
-            # image_batch = np.concatenate((image_batch, image_batch, image_batch), axis=3)
+            if FLAGS.num_channels == 1:
+              image_batch = np.concatenate((image_batch, image_batch, image_batch), axis=3)
             imshow_grid(image_batch, name=str(epoch) + '_original', save=True)
 
             # save reconstructed batch
             reconstructed_x = np.transpose(reconstructed_X_1_2.cpu().data.numpy(), (0, 2, 3, 1))
-            # reconstructed_x = np.concatenate((reconstructed_x, reconstructed_x, reconstructed_x), axis=3)
+            if FLAGS.num_channels == 1:
+              reconstructed_x = np.concatenate((reconstructed_x, reconstructed_x, reconstructed_x), axis=3)
             imshow_grid(reconstructed_x, name=str(epoch) + '_target', save=True)
 
             style_batch = np.transpose(X_3.cpu().numpy(), (0, 2, 3, 1))
-            # style_batch = np.concatenate((style_batch, style_batch, style_batch), axis=3)
+            if FLAGS.num_channels == 1:
+              style_batch = np.concatenate((style_batch, style_batch, style_batch), axis=3)
             imshow_grid(style_batch, name=str(epoch) + '_style', save=True)
 
             # save style swapped reconstructed batch
             reconstructed_style = np.transpose(reconstructed_X_3_2.cpu().data.numpy(), (0, 2, 3, 1))
-            # reconstructed_style = np.concatenate((reconstructed_style, reconstructed_style, reconstructed_style), axis=3)
+            if FLAGS.num_channels == 1:
+              reconstructed_style = np.concatenate((reconstructed_style, reconstructed_style, reconstructed_style), axis=3)
             imshow_grid(reconstructed_style, name=str(epoch) + '_style_target', save=True)

@@ -35,6 +35,10 @@ parser.add_argument('--load_saved', type=bool, default=False, help="flag to indi
 parser.add_argument('--start_epoch', type=int, default=0, help="flag to set the starting epoch for training")
 parser.add_argument('--end_epoch', type=int, default=100, help="flag to indicate the final epoch of training")
 
+# Flags for GAN training
+parser.add_argument('--forward_gan', type=bool, default=False)
+parser.add_argument('--reverse_gan', type=bool, default=False)
+
 FLAGS = parser.parse_args()
 
 if __name__ == '__main__':
